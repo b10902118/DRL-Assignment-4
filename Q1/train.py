@@ -72,12 +72,12 @@ class OUNoise:
 noise = OUNoise(env.action_space.shape[0], mu=0.0, sigma=0.2, theta=0.15, seed=42)
 
 
-def get_action(actor, state, add_noise=True):
+def get_action(actor, state, add_noise=True, noise_decay=None):
     state = torch.from_numpy(state).to(device)
     with torch.no_grad():
         action = actor(state).cpu().numpy()
     if add_noise:
-        action += noise.sample()
+        action += noise_decay * noise.sample()
     return np.clip(action, -1, 1)
 
 
@@ -158,7 +158,9 @@ while below_target_score:
     done = False
     step = 0
     while not done:
-        action = get_action(actor_learner, state)
+        action = get_action(
+            actor_learner, state, add_noise=True, noise_decay=0.992 ** (t - 1)
+        )
         next_state, reward, done, truncated, _ = env.step(action)
         replay_buffer.add(
             {
@@ -212,5 +214,5 @@ while below_target_score:
             below_target_score = False
 
 print(f"Environment solved in {t} episodes!")
-torch.save(actor_learner.state_dict(), "actor_learner.pth")
-torch.save(critic_learner.state_dict(), "critic_learner.pth")
+torch.save(actor_learner.state_dict(), "actor_learner_decay.pth")
+torch.save(critic_learner.state_dict(), "critic_learner_decay.pth")
