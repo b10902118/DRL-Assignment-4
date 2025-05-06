@@ -128,8 +128,6 @@ BATCH_SIZE = 256
 UPDATE_INTERVAL = 25
 PRINT_INTERVAL = 25
 
-scores_deque = deque(maxlen=UPDATE_INTERVAL)
-
 actor_learner = Actor(3, 1)
 actor_target = Actor(3, 1)
 actor_target.load_state_dict(actor_learner.state_dict())
@@ -161,8 +159,7 @@ while below_target_score:
     step = 0
     while not done:
         action = get_action(actor_learner, state)
-        ret = env.step(action)
-        next_state, reward, done, truncated, _ = ret
+        next_state, reward, done, truncated, _ = env.step(action)
         replay_buffer.add(
             {
                 "state": torch.from_numpy(state),
@@ -190,15 +187,30 @@ while below_target_score:
             actor_target.load_state_dict(actor_learner.state_dict())
             critic_target.load_state_dict(critic_learner.state_dict())
 
-    scores_deque.append(score)
-    mean = np.mean(scores_deque)
-    std = np.std(scores_deque)
-    score = mean - std
+    # std = np.std(scores_deque)
+    # score = mean - std
     if t % PRINT_INTERVAL == 0:
-        print(f"Episode {t}:\tMean: {mean:.2f}\tStd: {std:.2f}\tScore: {score:.2f}")
-    if score > TARGET_SCORE:
-        below_target_score = False
+        scores = []
+        for i in range(50):
+            state, _ = env.reset()
+            score = 0
+            done = False
+            while not done:
+                action = get_action(actor_learner, state, add_noise=False)
+                next_state, reward, done, truncated, _ = env.step(action)
+                state = next_state
+                score += reward
+                done = done or truncated
+            scores.append(score)
 
-print(f"Environment solved in {t} episodes! Average score: {np.mean(scores_deque):.2f}")
+        mean = np.mean(scores)
+        std = np.std(scores)
+        score = mean - std
+        print(f"Episode {t}:\tMean: {mean:.2f}\tStd: {std:.2f}\tScore: {score:.2f}")
+
+        if score > TARGET_SCORE:
+            below_target_score = False
+
+print(f"Environment solved in {t} episodes!")
 torch.save(actor_learner.state_dict(), "actor_learner.pth")
 torch.save(critic_learner.state_dict(), "critic_learner.pth")
