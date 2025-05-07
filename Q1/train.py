@@ -27,7 +27,7 @@ class Actor(nn.Module):
         )
 
     def forward(self, state):
-        return self.net(state)
+        return 2 * self.net(state)
 
 
 class Critic(nn.Module):
@@ -78,7 +78,7 @@ def get_action(actor, state, add_noise=True, noise_decay=None):
         action = actor(state).cpu().numpy()
     if add_noise:
         action += noise_decay * noise.sample()
-    return np.clip(action, -1, 1)
+    return np.clip(action, -2, 2)
 
 
 def train(
@@ -131,7 +131,7 @@ PRINT_INTERVAL = 25
 actor_learner = Actor(3, 1)
 actor_target = Actor(3, 1)
 actor_target.load_state_dict(actor_learner.state_dict())
-actor_optimizer = optim.Adam(actor_learner.parameters(), lr=0.0001, weight_decay=0.01)
+actor_optimizer = optim.AdamW(actor_learner.parameters(), lr=0.0001, weight_decay=0.01)
 
 critic_learner = Critic(3, 1)
 critic_target = Critic(3, 1)
@@ -146,21 +146,24 @@ critic_learner.to(device)
 critic_target.to(device)
 
 replay_buffer = ReplayBuffer(
-    storage=LazyTensorStorage(100000, device=device), batch_size=BATCH_SIZE
+    storage=LazyTensorStorage(10000, device=device), batch_size=BATCH_SIZE
 )
 
 t = 0
 below_target_score = True
-while below_target_score:
+while below_target_score and t < 2000:
     t += 1
     state, _ = env.reset()
     score = 0
     done = False
     step = 0
     while not done:
-        action = get_action(
-            actor_learner, state, add_noise=True, noise_decay=0.992 ** (t - 1)
-        )
+        if t < 10:  # warmup
+            action = np.array([np.random.uniform(-2.0, 2.0)], dtype=np.float32)
+        else:
+            action = get_action(
+                actor_learner, state, add_noise=True, noise_decay=0.999 ** (t - 1)
+            )
         next_state, reward, done, truncated, _ = env.step(action)
         replay_buffer.add(
             {
@@ -214,5 +217,5 @@ while below_target_score:
             below_target_score = False
 
 print(f"Environment solved in {t} episodes!")
-torch.save(actor_learner.state_dict(), "actor_learner_decay.pth")
-torch.save(critic_learner.state_dict(), "critic_learner_decay.pth")
+torch.save(actor_learner.state_dict(), "actor_learner.pth")
+torch.save(critic_learner.state_dict(), "critic_learner.pth")

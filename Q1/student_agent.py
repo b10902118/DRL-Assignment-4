@@ -44,7 +44,7 @@ class Actor(nn.Module):
         )
 
     def forward(self, state):
-        return self.net(state)
+        return 2 * self.net(state)
 
 
 actor = Actor(3, 1)
