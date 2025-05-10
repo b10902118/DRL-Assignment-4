@@ -113,8 +113,8 @@ def sac_train(
 
     # Current Q estimates
     current_q1, current_q2 = critic(state, action)
-    current_q1.squeeze(-1)
-    current_q2.squeeze(-1)
+    current_q1 = current_q1.squeeze(-1)
+    current_q2 = current_q2.squeeze(-1)
     critic_loss = F.mse_loss(current_q1, q_target) + F.mse_loss(current_q2, q_target)
 
     critic_optimizer.zero_grad()
