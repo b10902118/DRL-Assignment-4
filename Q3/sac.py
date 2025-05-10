@@ -114,6 +114,8 @@ def sac_train(
 
     # Current Q estimates
     current_q1, current_q2 = critic(state, action)
+    current_q1.squeeze(-1)
+    current_q2.squeeze(-1)
     critic_loss = F.mse_loss(current_q1, q_target) + F.mse_loss(current_q2, q_target)
 
     critic_optimizer.zero_grad()
@@ -182,7 +184,7 @@ for t in tqdm(range(1, NUM_EPISODES + 1)):
     done = False
     fall_duration = 0
     while not done:
-        if t < 100:
+        if t < 0:
             action = np.random.uniform(-1.0, 1.0, size=action_size)
         else:
             action = get_action(actor, state)
