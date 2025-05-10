@@ -210,7 +210,11 @@ for t in tqdm(range(NUM_EPISODES)):
 
         state = next_state
         score += reward
-        fall_duration += reward < 1e-14
+        if reward < 1e-10:
+            fall_duration += 1
+        else:
+            fall_duration = 0
+
         done = done or truncated or fall_duration > MAX_FALL_DURATION
         step += 1
 
