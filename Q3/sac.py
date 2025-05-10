@@ -149,7 +149,7 @@ def get_action(actor, state, deterministic=False):
     return action[0].cpu().numpy()
 
 
-NUM_EPISODES = 6000
+NUM_EPISODES = 10000
 TARGET_SCORE = 500
 BATCH_SIZE = 512
 UPDATE_INTERVAL = 25
@@ -184,7 +184,7 @@ for t in tqdm(range(1, NUM_EPISODES + 1)):
     done = False
     fall_duration = 0
     while not done:
-        if t < 0:
+        if t < 100:
             action = np.random.uniform(-1.0, 1.0, size=action_size)
         else:
             action = get_action(actor, state)
