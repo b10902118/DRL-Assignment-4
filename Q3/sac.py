@@ -172,9 +172,12 @@ replay_buffer = ReplayBuffer(
 
 # --- Training loop ---
 score_deque = deque(maxlen=200)
+step_deque = deque(maxlen=200)
+
 for t in tqdm(range(NUM_EPISODES)):
     state, _ = env.reset()
     score = 0
+    step = 0
     done = False
     fall_duration = 0
     while not done:
@@ -209,10 +212,14 @@ for t in tqdm(range(NUM_EPISODES)):
         score += reward
         fall_duration += reward < 1e-14
         done = done or truncated or fall_duration > MAX_FALL_DURATION
+        step += 1
 
     score_deque.append(score)
+    step_deque.append(step)
     if t % PRINT_INTERVAL == 0:
-        print(f"Episode {t} | Mean: {np.mean(score_deque):.2f}")
+        print(
+            f"Episode {t} | Mean Score: {np.mean(score_deque):.2f} Mean Step: {np.mean(step_deque):.2f}"
+        )
 
         if t > 1000:
             eval_scores = []
