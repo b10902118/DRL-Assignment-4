@@ -153,7 +153,7 @@ NUM_EPISODES = 6000
 TARGET_SCORE = 500
 BATCH_SIZE = 512
 UPDATE_INTERVAL = 25
-PRINT_INTERVAL = 100
+PRINT_INTERVAL = 200
 MAX_FALL_DURATION = 100
 
 # --- Initialize everything ---
@@ -247,12 +247,9 @@ for t in tqdm(range(1, NUM_EPISODES + 1)):
                 f"Eval | Mean: {mean:.2f} | Std: {std:.2f} | Score: {final_score:.2f}"
             )
 
-            if final_score > TARGET_SCORE:
-                print("Saving models...")
-                torch.save(actor.state_dict(), f"sac_actor_{t}_{int(final_score)}.pth")
-                torch.save(
-                    critic.state_dict(), f"sac_critic_{t}_{int(final_score)}.pth"
-                )
+            print("Saving models...")
+            torch.save(actor.state_dict(), f"sac_actor_{t}_{int(final_score)}.pth")
+            torch.save(critic.state_dict(), f"sac_critic_{t}_{int(final_score)}.pth")
 
 # Final save
 torch.save(actor.state_dict(), "sac_actor_final.pth")
