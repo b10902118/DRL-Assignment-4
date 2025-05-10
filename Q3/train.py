@@ -210,7 +210,8 @@ for t in tqdm(range(NUM_EPISODES)):
         #if step % UPDATE_INTERVAL == 0:
         #    actor_target.load_state_dict(actor_learner.state_dict())
         #    critic_target.load_state_dict(critic_learner.state_dict())
-
+    
+    score_deque.append(score)
     # std = np.std(scores_deque)
     # score = mean - std
     if t % PRINT_INTERVAL == 0:
