@@ -175,6 +175,7 @@ replay_buffer = ReplayBuffer(
 # --- Training loop ---
 score_deque = deque(maxlen=200)
 step_deque = deque(maxlen=200)
+best_eval_score = -float("inf")
 
 for t in tqdm(range(1, NUM_EPISODES + 1)):
     state, _ = env.reset()
@@ -247,9 +248,14 @@ for t in tqdm(range(1, NUM_EPISODES + 1)):
                 f"Eval | Mean: {mean:.2f} | Std: {std:.2f} | Score: {final_score:.2f}"
             )
 
-            print("Saving models...")
-            torch.save(actor.state_dict(), f"sac_actor_{t}_{int(final_score)}.pth")
-            torch.save(critic.state_dict(), f"sac_critic_{t}_{int(final_score)}.pth")
+            if final_score > best_eval_score:
+                print("Saving models...")
+                torch.save(actor.state_dict(), f"sac_actor_{t}_{int(final_score)}.pth")
+                torch.save(
+                    critic.state_dict(), f"sac_critic_{t}_{int(final_score)}.pth"
+                )
+                best_eval_score = final_score
+
 
 # Final save
 torch.save(actor.state_dict(), "sac_actor_final.pth")
