@@ -174,7 +174,7 @@ replay_buffer = ReplayBuffer(
 score_deque = deque(maxlen=200)
 step_deque = deque(maxlen=200)
 
-for t in tqdm(range(NUM_EPISODES)):
+for t in tqdm(range(1, NUM_EPISODES + 1)):
     state, _ = env.reset()
     score = 0
     step = 0
