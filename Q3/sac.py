@@ -50,6 +50,7 @@ class SACActor(nn.Module):
 
     def sample(self, state):
         mean, std = self.forward(state)
+        print(f"{mean=} {std=}")
         normal = torch.distributions.Normal(mean, std)
         x_t = normal.rsample()
         action = torch.tanh(x_t)
