@@ -137,9 +137,9 @@ def train(
         target_param.data.copy_(target_param.data * (1-tau) + param.data * tau)
 
 
-NUM_EPISODES = 10000
+NUM_EPISODES = 6000
 TARGET_SCORE = 500
-BATCH_SIZE = 256
+BATCH_SIZE = 512
 UPDATE_INTERVAL = 25
 PRINT_INTERVAL = 100
 MAX_FALL_DURATION = 100
@@ -164,6 +164,7 @@ replay_buffer = ReplayBuffer(
 )
 
 below_target_score = True
+score_deque = deque(maxlen=200)
 for t in tqdm(range(NUM_EPISODES)):
     t += 1
     state, _ = env.reset()
@@ -173,7 +174,7 @@ for t in tqdm(range(NUM_EPISODES)):
     fall_duration = 0
     while not done:  # 1000 steps
         # print(state)
-        if t < 50:  # warmup
+        if t < 100:  # warmup
             action = np.random.uniform(-1.0, 1.0, size=env.action_space.shape)
         else:
             action = get_action(
@@ -212,33 +213,35 @@ for t in tqdm(range(NUM_EPISODES)):
 
     # std = np.std(scores_deque)
     # score = mean - std
-    if t % PRINT_INTERVAL == 0 and t > 5000:
-        scores = []
-        for i in range(50):  # 1 episode/s
-            state, _ = env.reset()
-            score = 0
-            done = False
-            while not done:
-                action = get_action(actor_learner, state, add_noise=False)
-                next_state, reward, done, truncated, _ = env.step(action)
-                state = next_state
-                score += reward
-                done = done or truncated
-            scores.append(score)
+    if t % PRINT_INTERVAL == 0:
+        print(f"Mean: {np.mean(score_deque)}")
+        if t > 1000:
+            scores = []
+            for i in range(50):  # 1 episode/s
+                state, _ = env.reset()
+                score = 0
+                done = False
+                while not done:
+                    action = get_action(actor_learner, state, add_noise=False)
+                    next_state, reward, done, truncated, _ = env.step(action)
+                    state = next_state
+                    score += reward
+                    done = done or truncated
+                scores.append(score)
 
-        mean = np.mean(scores)
-        std = np.std(scores)
-        score = mean - std
-        print(f"Episode {t}:\tMean: {mean:.2f}\tStd: {std:.2f}\tScore: {score:.2f}")
+            mean = np.mean(scores)
+            std = np.std(scores)
+            score = mean - std
+            print(f"Episode {t}:\tMean: {mean:.2f}\tStd: {std:.2f}\tScore: {score:.2f}")
 
-        if score > TARGET_SCORE:
-            print(f"Saving Weights")
-            torch.save(
-                actor_learner.state_dict(), f"actor_learner_{t}_{int(score)}.pth"
-            )
-            torch.save(
-                critic_learner.state_dict(), f"critic_learner_{t}_{int(score)}.pth"
-            )
+            if score > TARGET_SCORE:
+                print(f"Saving Weights")
+                torch.save(
+                    actor_learner.state_dict(), f"actor_learner_{t}_{int(score)}.pth"
+                )
+                torch.save(
+                    critic_learner.state_dict(), f"critic_learner_{t}_{int(score)}.pth"
+                )
 
 torch.save(actor_learner.state_dict(), "actor_learner_last.pth")
 torch.save(critic_learner.state_dict(), "critic_learner_last.pth")
