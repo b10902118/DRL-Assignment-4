@@ -108,8 +108,9 @@ def sac_train(
     with torch.no_grad():
         next_action, next_log_prob = actor.sample(next_state)
         target_q1, target_q2 = target_critic(next_state, next_action)
+        print(f"{target_q1.shape=}")
         target_q = torch.min(target_q1, target_q2) - alpha * next_log_prob
-        q_target = reward + (1 - done) * gamma * target_q
+        q_target = reward + (1 - done) * gamma * target_q.squeeze(-1)
 
     # Current Q estimates
     current_q1, current_q2 = critic(state, action)
@@ -185,6 +186,7 @@ for t in tqdm(range(1, NUM_EPISODES + 1)):
             action = np.random.uniform(-1.0, 1.0, size=action_size)
         else:
             action = get_action(actor, state)
+            print(f"{action.shape=}")
 
         next_state, reward, done, truncated, _ = env.step(action)
         replay_buffer.add(
