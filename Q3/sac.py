@@ -50,7 +50,6 @@ class SACActor(nn.Module):
 
     def sample(self, state):
         mean, std = self.forward(state)
-        print(f"{mean=} {std=}")
         normal = torch.distributions.Normal(mean, std)
         x_t = normal.rsample()
         action = torch.tanh(x_t)
@@ -109,7 +108,6 @@ def sac_train(
     with torch.no_grad():
         next_action, next_log_prob = actor.sample(next_state)
         target_q1, target_q2 = target_critic(next_state, next_action)
-        print(f"{target_q1.shape=}")
         target_q = torch.min(target_q1, target_q2) - alpha * next_log_prob
         q_target = reward + (1 - done) * gamma * target_q.squeeze(-1)
 
@@ -140,15 +138,15 @@ def sac_train(
 
 # --- Action selection ---
 def get_action(actor, state, deterministic=False):
-    # state = torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(device)
-    state = torch.from_numpy(state).float().to(device)
+    # batch size 1
+    state = torch.from_numpy(state).float().to(device).unsqueeze(0)
     with torch.no_grad():
         if deterministic:
             mean, _ = actor(state)
             action = torch.tanh(mean)
         else:
             action, _ = actor.sample(state)
-    return action.cpu().numpy()
+    return action[0].cpu().numpy()
 
 
 NUM_EPISODES = 6000
@@ -189,7 +187,6 @@ for t in tqdm(range(1, NUM_EPISODES + 1)):
             action = np.random.uniform(-1.0, 1.0, size=action_size)
         else:
             action = get_action(actor, state)
-            print(f"{action.shape=}")
 
         next_state, reward, done, truncated, _ = env.step(action)
         replay_buffer.add(
