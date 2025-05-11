@@ -27,7 +27,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # --- SAC Actor ---
 class SACActor(nn.Module):
     def __init__(
-        self, state_size, action_size, hidden_sizes=[256, 256], log_std_bounds=[-20, 2]
+        self,
+        state_size,
+        action_size,
+        hidden_sizes=[512, 512, 512],
+        log_std_bounds=[-20, 2],
     ):
         super().__init__()
         self.net = nn.Sequential(
@@ -35,9 +39,11 @@ class SACActor(nn.Module):
             nn.ReLU(),
             nn.Linear(hidden_sizes[0], hidden_sizes[1]),
             nn.ReLU(),
+            nn.Linear(hidden_sizes[1], hidden_sizes[2]),
+            nn.ReLU(),
         )
-        self.mean_layer = nn.Linear(hidden_sizes[1], action_size)
-        self.log_std_layer = nn.Linear(hidden_sizes[1], action_size)
+        self.mean_layer = nn.Linear(hidden_sizes[2], action_size)
+        self.log_std_layer = nn.Linear(hidden_sizes[2], action_size)
         self.log_std_bounds = log_std_bounds
 
     def forward(self, state):
@@ -61,21 +67,25 @@ class SACActor(nn.Module):
 
 # --- SAC Critic (Twin Q) ---
 class SACCritic(nn.Module):
-    def __init__(self, state_size, action_size, hidden_sizes=[256, 256]):
+    def __init__(self, state_size, action_size, hidden_sizes=[512, 512, 512]):
         super().__init__()
         self.q1 = nn.Sequential(
             nn.Linear(state_size + action_size, hidden_sizes[0]),
             nn.ReLU(),
             nn.Linear(hidden_sizes[0], hidden_sizes[1]),
             nn.ReLU(),
-            nn.Linear(hidden_sizes[1], 1),
+            nn.Linear(hidden_sizes[1], hidden_sizes[2]),
+            nn.ReLU(),
+            nn.Linear(hidden_sizes[2], 1),
         )
         self.q2 = nn.Sequential(
             nn.Linear(state_size + action_size, hidden_sizes[0]),
             nn.ReLU(),
             nn.Linear(hidden_sizes[0], hidden_sizes[1]),
             nn.ReLU(),
-            nn.Linear(hidden_sizes[1], 1),
+            nn.Linear(hidden_sizes[1], hidden_sizes[2]),
+            nn.ReLU(),
+            nn.Linear(hidden_sizes[2], 1),
         )
 
     def forward(self, state, action):
@@ -149,12 +159,14 @@ def get_action(actor, state, deterministic=False):
     return action[0].cpu().numpy()
 
 
-NUM_EPISODES = 10000
+NUM_EPISODES = 5000
 TARGET_SCORE = 500
-BATCH_SIZE = 512
+BATCH_SIZE = 256
 UPDATE_INTERVAL = 25
 PRINT_INTERVAL = 200
-MAX_FALL_DURATION = 100
+# MAX_FALL_DURATION = 200
+UPDATE_PER_STEP = 1
+WARMUP_EPISODES = 25
 
 # --- Initialize everything ---
 state_size = 67
@@ -184,7 +196,7 @@ for t in tqdm(range(1, NUM_EPISODES + 1)):
     done = False
     fall_duration = 0
     while not done:
-        if t < 100:
+        if t <= WARMUP_EPISODES:
             action = np.random.uniform(-1.0, 1.0, size=action_size)
         else:
             action = get_action(actor, state)
@@ -200,25 +212,26 @@ for t in tqdm(range(1, NUM_EPISODES + 1)):
             }
         )
 
-        if len(replay_buffer) > BATCH_SIZE:
-            sac_train(
-                actor,
-                critic,
-                target_critic,
-                replay_buffer,
-                actor_optimizer,
-                critic_optimizer,
-                alpha,
-            )
+        if len(replay_buffer) > BATCH_SIZE and t > WARMUP_EPISODES:
+            for i in range(UPDATE_PER_STEP):
+                sac_train(
+                    actor,
+                    critic,
+                    target_critic,
+                    replay_buffer,
+                    actor_optimizer,
+                    critic_optimizer,
+                    alpha,
+                )
 
         state = next_state
         score += reward
-        if reward < 1e-10:
-            fall_duration += 1
-        else:
-            fall_duration = 0
+        # if reward < 1e-10:
+        #    fall_duration += 1
+        # else:
+        #    fall_duration = 0
 
-        done = done or truncated or fall_duration > MAX_FALL_DURATION
+        done = done or truncated  # or fall_duration > MAX_FALL_DURATION
         step += 1
 
     score_deque.append(score)
@@ -228,9 +241,9 @@ for t in tqdm(range(1, NUM_EPISODES + 1)):
             f"Episode {t} | Mean Score: {np.mean(score_deque):.2f} Mean Step: {np.mean(step_deque):.2f}"
         )
 
-        if t > 1000:
+        if t > 500:
             eval_scores = []
-            for _ in range(50):
+            for _ in range(20):
                 s, _ = env.reset()
                 done = False
                 ep_score = 0
@@ -255,6 +268,10 @@ for t in tqdm(range(1, NUM_EPISODES + 1)):
                     critic.state_dict(), f"sac_critic_{t}_{int(final_score)}.pth"
                 )
                 best_eval_score = final_score
+                if best_eval_score > 5:
+                    UPDATE_PER_STEP = 2
+                elif best_eval_score > 50:
+                    UPDATE_PER_STEP = 4
 
 
 # Final save
