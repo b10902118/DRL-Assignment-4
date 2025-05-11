@@ -135,6 +135,8 @@ def sac_train(
     new_action, log_prob = actor.sample(state)
     q1_new, q2_new = critic(state, new_action)
     q_new = torch.min(q1_new, q2_new)
+    # print(f"{q_new.shape}") # (256, 1)
+    # print(f"{log_prob.shape}") # (256, 1)
     actor_loss = (alpha * log_prob - q_new).mean()
 
     actor_optimizer.zero_grad()
@@ -144,6 +146,8 @@ def sac_train(
     # Soft update of target critic
     for target_param, param in zip(target_critic.parameters(), critic.parameters()):
         target_param.data.copy_(tau * param.data + (1 - tau) * target_param.data)
+
+    return actor_loss, critic_loss
 
 
 # --- Action selection ---
@@ -163,10 +167,11 @@ NUM_EPISODES = 5000
 TARGET_SCORE = 500
 BATCH_SIZE = 256
 UPDATE_INTERVAL = 25
-PRINT_INTERVAL = 200
+PRINT_INTERVAL = 10
+EVAL_INTERVAL = 200
 # MAX_FALL_DURATION = 200
 UPDATE_PER_STEP = 1
-WARMUP_EPISODES = 25
+WARMUP_EPISODES = 50
 
 # --- Initialize everything ---
 state_size = 67
@@ -188,6 +193,7 @@ replay_buffer = ReplayBuffer(
 score_deque = deque(maxlen=200)
 step_deque = deque(maxlen=200)
 best_eval_score = -float("inf")
+actor_loss, critic_loss = 0.0, 0.0
 
 for t in tqdm(range(1, NUM_EPISODES + 1)):
     state, _ = env.reset()
@@ -214,7 +220,7 @@ for t in tqdm(range(1, NUM_EPISODES + 1)):
 
         if len(replay_buffer) > BATCH_SIZE and t > WARMUP_EPISODES:
             for i in range(UPDATE_PER_STEP):
-                sac_train(
+                al, cl = sac_train(
                     actor,
                     critic,
                     target_critic,
@@ -223,6 +229,8 @@ for t in tqdm(range(1, NUM_EPISODES + 1)):
                     critic_optimizer,
                     alpha,
                 )
+                actor_loss += al
+                critic_loss += cl
 
         state = next_state
         score += reward
@@ -238,40 +246,37 @@ for t in tqdm(range(1, NUM_EPISODES + 1)):
     step_deque.append(step)
     if t % PRINT_INTERVAL == 0:
         print(
-            f"Episode {t} | Mean Score: {np.mean(score_deque):.2f} Mean Step: {np.mean(step_deque):.2f}"
+            f"Episode {t} | Mean Score: {np.mean(score_deque):.2f} | Actor Loss {actor_loss/(PRINT_INTERVAL*1000*UPDATE_PER_STEP):.2f} | Critic Loss {critic_loss/(PRINT_INTERVAL*1000*UPDATE_PER_STEP):.2f} "
         )
+        actor_loss, critic_loss = 0.0, 0.0
 
-        if t > 500:
-            eval_scores = []
-            for _ in range(20):
-                s, _ = env.reset()
-                done = False
-                ep_score = 0
-                while not done:
-                    a = get_action(actor, s, deterministic=True)
-                    s, r, done, truncated, _ = env.step(a)
-                    ep_score += r
-                    done = done or truncated
-                eval_scores.append(ep_score)
+    if t % EVAL_INTERVAL and t > 500:
+        eval_scores = []
+        for _ in range(20):
+            s, _ = env.reset()
+            done = False
+            ep_score = 0
+            while not done:
+                a = get_action(actor, s, deterministic=True)
+                s, r, done, truncated, _ = env.step(a)
+                ep_score += r
+                done = done or truncated
+            eval_scores.append(ep_score)
 
-            mean = np.mean(eval_scores)
-            std = np.std(eval_scores)
-            final_score = mean - std
-            print(
-                f"Eval | Mean: {mean:.2f} | Std: {std:.2f} | Score: {final_score:.2f}"
-            )
+        mean = np.mean(eval_scores)
+        std = np.std(eval_scores)
+        final_score = mean - std
+        print(f"Eval | Mean: {mean:.2f} | Std: {std:.2f} | Score: {final_score:.2f}")
 
-            if final_score > best_eval_score:
-                print("Saving models...")
-                torch.save(actor.state_dict(), f"sac_actor_{t}_{int(final_score)}.pth")
-                torch.save(
-                    critic.state_dict(), f"sac_critic_{t}_{int(final_score)}.pth"
-                )
-                best_eval_score = final_score
-                if best_eval_score > 5:
-                    UPDATE_PER_STEP = 2
-                elif best_eval_score > 50:
-                    UPDATE_PER_STEP = 4
+        if final_score > best_eval_score:
+            print("Saving models...")
+            torch.save(actor.state_dict(), f"sac_actor_{t}_{int(final_score)}.pth")
+            torch.save(critic.state_dict(), f"sac_critic_{t}_{int(final_score)}.pth")
+            best_eval_score = final_score
+            if best_eval_score > 5:
+                UPDATE_PER_STEP = 2
+            elif best_eval_score > 50:
+                UPDATE_PER_STEP = 4
 
 
 # Final save
