@@ -101,7 +101,9 @@ def sac_train(
     replay_buffer,
     actor_optimizer,
     critic_optimizer,
-    alpha,
+    log_alpha,
+    alpha_optimizer,
+    target_entropy,
     gamma=0.99,
     tau=0.005,
 ):
@@ -113,6 +115,7 @@ def sac_train(
         batch["next_state"],
         batch["done"],
     )
+    alpha = log_alpha.exp()
 
     # Compute target Q value
     with torch.no_grad():
@@ -142,6 +145,21 @@ def sac_train(
     actor_optimizer.zero_grad()
     actor_loss.backward()
     actor_optimizer.step()
+
+    # Alpha update
+    # TODO: understand this
+    # s = -(log_prob + target_entropy).detach().mean()
+    alpha_loss = -(log_alpha * (log_prob + target_entropy).detach()).mean()
+
+    alpha_optimizer.zero_grad()
+    alpha_loss.backward()
+    # print(log_prob)
+    # print(target_entropy)
+    ## print(s, log_alpha.grad)
+    # assert torch.equal(
+    #    s, log_alpha.grad
+    # ), f"{s} {log_alpha.grad} alpha_loss should be the mean of log_prob + target_entropy"
+    alpha_optimizer.step()
 
     # Soft update of target critic
     for target_param, param in zip(target_critic.parameters(), critic.parameters()):
@@ -176,7 +194,10 @@ WARMUP_EPISODES = 50
 # --- Initialize everything ---
 state_size = 67
 action_size = 21
-alpha = 0.2  # fixed entropy coefficient
+# alpha = 0.2  # fixed entropy coefficient
+target_entropy = torch.tensor(-action_size, dtype=torch.float32).to(device)
+log_alpha = torch.tensor(np.log(0.1), requires_grad=True, device=device)
+alpha_optimizer = optim.Adam([log_alpha], lr=1e-4)
 actor = SACActor(state_size, action_size).to(device)
 critic = SACCritic(state_size, action_size).to(device)
 target_critic = SACCritic(state_size, action_size).to(device)
@@ -227,7 +248,9 @@ for t in tqdm(range(1, NUM_EPISODES + 1)):
                     replay_buffer,
                     actor_optimizer,
                     critic_optimizer,
-                    alpha,
+                    log_alpha,
+                    alpha_optimizer,
+                    target_entropy,
                 )
                 actor_loss += al
                 critic_loss += cl
@@ -246,11 +269,12 @@ for t in tqdm(range(1, NUM_EPISODES + 1)):
     step_deque.append(step)
     if t % PRINT_INTERVAL == 0:
         print(
-            f"Episode {t} | Mean Score: {np.mean(score_deque):.2f} | Actor Loss {actor_loss/(PRINT_INTERVAL*1000*UPDATE_PER_STEP):.2f} | Critic Loss {critic_loss/(PRINT_INTERVAL*1000*UPDATE_PER_STEP):.2f} "
+            f"Episode {t} | Mean Score: {np.mean(score_deque):.2f} | Actor Loss {actor_loss/(PRINT_INTERVAL*1000*UPDATE_PER_STEP):.2f}"
+            f" | Critic Loss {critic_loss/(PRINT_INTERVAL*1000*UPDATE_PER_STEP):.2f} | Alpha: {torch.mean(log_alpha.exp().detach())} "
         )
         actor_loss, critic_loss = 0.0, 0.0
 
-    if t % EVAL_INTERVAL and t > 500:
+    if t % EVAL_INTERVAL == 0 and t > 500:
         eval_scores = []
         for _ in range(20):
             s, _ = env.reset()
