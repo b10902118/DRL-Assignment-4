@@ -50,7 +50,7 @@ def get_action(actor, state):
 
 
 actor = SACActor(state_size, action_size).to(device)
-actor.load_state_dict(torch.load("./sac_actor_1667_717.pth"))
+actor.load_state_dict(torch.load("./sac_actor_1667_717.pth", map_location=device))
 
 
 # Do not modify the input of the 'act' function and the '__init__' function.
