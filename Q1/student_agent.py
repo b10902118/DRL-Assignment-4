@@ -31,7 +31,7 @@ class Actor(nn.Module):
 
 
 actor = Actor(3, 1)
-actor.load_state_dict(torch.load("actor_learner.pth"))
+actor.load_state_dict(torch.load("actor_learner.pth", map_location=device))
 actor.to(device)
 
 

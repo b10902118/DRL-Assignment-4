@@ -32,7 +32,7 @@ def get_action(actor, state):
 
 
 actor = Actor(5, 1)
-actor.load_state_dict(torch.load("./actor_learner_250_993.pth"))
+actor.load_state_dict(torch.load("./actor_learner_250_993.pth", map_location=device))
 actor.to(device)
 
 
